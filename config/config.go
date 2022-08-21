@@ -39,15 +39,12 @@ type Config struct {
 	AccessKeyId     string           `yaml:"accessKeyId"`
 	AccessKeySecret string           `yaml:"accessKeySecret"`
 	Log             *loger.LogConfig `yaml:"log"`
-	TTL             int64            `yaml:"ttl"`
 	IPv4            string           `yaml:"ipv4_check_url"`
 	IPv6            string           `yaml:"ipv6_check_url"`
 	Interval        int64            `yaml:"interval"`
 	BroadbandRetry  int8             `yaml:"broadband_retry"`
 	UseCache        bool             `yaml:"cache"`
 	DNSHost         []DNSHost        `yaml:"dnshost"`
-	// IP        map[string]string // 记录阿里云dns的ip
-	// RecordId       map[string]string // 记录阿里云DNS的recordID
 }
 
 type DNSHost struct {

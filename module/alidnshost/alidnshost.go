@@ -25,9 +25,12 @@ import (
 	myConfig "aliyun-dnshost/config"
 	"aliyun-dnshost/module/loger"
 	"aliyun-dnshost/module/myip"
+	"aliyun-dnshost/module/utils"
 
 	aliCliSdk "github.com/alibabacloud-go/darabonba-openapi/client"
 	"github.com/alibabacloud-go/domain-20180129/v3/client"
+
+	// util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/alibabacloud-go/tea/tea"
 )
 
@@ -41,9 +44,14 @@ func CreateClient(accessKeyId, accessKeySecret *string) (*client.Client, error) 
 }
 
 // 正常宽带
-func Run(ctx context.Context, cfg *myConfig.Config, cli client.Client) {
+func Run(ctx context.Context, cfg *myConfig.Config, cli utils.DomainService) {
 	// 查询IP
 	PubIPv4, PubIPv6 := myip.PublilcIPs(cfg.IPv4, cfg.IPv6)
+
+	respQueryDomain, errQueryDomain := cli.QueryDomain()
+	if errQueryDomain != nil {
+		loger.Debug("errQueryDomain: %v", errQueryDomain)
+	}
 
 	// 更新所有用户配置
 	for _, dnshost := range cfg.DNSHost {
@@ -52,13 +60,13 @@ func Run(ctx context.Context, cfg *myConfig.Config, cli client.Client) {
 			return
 		default:
 			if (PubIPv4 != "") && (dnshost.IPv4EN != false) {
-				err := UpdateDomains(cli, nil, dnshost.DnsName, PubIPv4, myConfig.IPv4Type)
+				err := UpdateDomains(cli, nil, dnshost.DnsName, PubIPv4, myConfig.IPv4Type, respQueryDomain.Body.Data.Domain)
 				if err != nil {
 					loger.Error("IPv4 update failed : %s", err.Error())
 				}
 			}
 			if (PubIPv6 != "") && (dnshost.IPv6EN != false) {
-				err := UpdateDomains(cli, nil, dnshost.DnsName, PubIPv6, myConfig.IPv6Type)
+				err := UpdateDomains(cli, nil, dnshost.DnsName, PubIPv6, myConfig.IPv6Type, respQueryDomain.Body.Data.Domain)
 				if err != nil {
 					loger.Error("IPv6 update failed : %s", err.Error())
 				}
@@ -68,9 +76,14 @@ func Run(ctx context.Context, cfg *myConfig.Config, cli client.Client) {
 }
 
 // 宽带多拨或有多条宽带线路
-func RunOnMultiBroadband(ctx context.Context, cfg *myConfig.Config, cli client.Client) {
+func RunOnMultiBroadband(ctx context.Context, cfg *myConfig.Config, cli utils.DomainService) {
 	// 重复获取公网IP
 	broadbandIPv4, broadbandIPv6 := myip.MultiBroadbandPublicIPs(cfg.IPv4, cfg.IPv6, cfg.BroadbandRetry)
+
+	respQueryDomain, errQueryDomain := cli.QueryDomain()
+	if errQueryDomain != nil {
+		loger.Debug("errQueryDomain: %v", errQueryDomain)
+	}
 
 	// 更新所有用户配置
 	for _, dnshost := range cfg.DNSHost {
@@ -80,14 +93,14 @@ func RunOnMultiBroadband(ctx context.Context, cfg *myConfig.Config, cli client.C
 		default:
 			if broadbandIPv4 != nil && (dnshost.IPv4EN != false) {
 				IP := myip.BroadbandIPFisrt(broadbandIPv4)
-				err := UpdateDomains(cli, broadbandIPv4, dnshost.DnsName, IP, myConfig.IPv4Type)
+				err := UpdateDomains(cli, broadbandIPv4, dnshost.DnsName, IP, myConfig.IPv4Type, respQueryDomain.Body.Data.Domain)
 				if err != nil {
 					loger.Error("update IPv4 failed : %s", err.Error())
 				}
 			}
 			if broadbandIPv6 != nil && (dnshost.IPv6EN != false) {
 				IP := myip.BroadbandIPFisrt(broadbandIPv6)
-				err := UpdateDomains(cli, broadbandIPv6, dnshost.DnsName, IP, myConfig.IPv6Type)
+				err := UpdateDomains(cli, broadbandIPv6, dnshost.DnsName, IP, myConfig.IPv6Type, respQueryDomain.Body.Data.Domain)
 				if err != nil {
 					loger.Error("update IPv6 failed : %s", err.Error())
 				}

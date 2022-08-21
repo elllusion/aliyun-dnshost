@@ -21,8 +21,10 @@ package myip
 
 import (
 	"aliyun-dnshost/config"
-	domain "github.com/alibabacloud-go/domain-20180129/v3/client"
-	util "github.com/alibabacloud-go/tea-utils/service"
+	"aliyun-dnshost/module/loger"
+	"aliyun-dnshost/module/utils"
+	// domain "github.com/alibabacloud-go/domain-20180129/v3/client"
+	// util "github.com/alibabacloud-go/tea-utils/service"
 )
 
 // 当前使用的ip的缓存
@@ -41,29 +43,27 @@ type LocalCache struct {
 }
 
 // 初始化IP缓存
-func (c *LocalCache) Init(cfg *config.Config, cli domain.Client) {
+func (c *LocalCache) Init(cfg *config.Config, domainService utils.DomainService) {
 	//c.current = make(map[string]string)
 	c.IP = make(map[string]string)
 	c.IpType = make(map[string]string)
 	c.DnsName = make(map[string]string)
+
+	respQueryDomain, errQueryDomain := domainService.QueryDomain()
+	if errQueryDomain != nil {
+		loger.Debug("errQueryDomain: %v", errQueryDomain)
+	}
+
 	for _, dnshost := range cfg.DNSHost {
-		if (dnshost.IPv4EN != false) || (cfg.IPv4 != "") {
-			subDomain := dnshost.DnsName
-			c.RecordsToCache(cli, &subDomain)
-		}
-		if (dnshost.IPv6EN != false) || (cfg.IPv6 != "") {
-			subDomain := dnshost.DnsName
-			c.RecordsToCache(cli, &subDomain)
+		for _, domain := range respQueryDomain.Body.Data.Domain {
+			if (dnshost.IPv4EN != false) || (cfg.IPv4 != "") {
+				c.RecordsToCache(domainService, domain.InstanceId, config.IPv4Type)
+			}
+			if (dnshost.IPv6EN != false) || (cfg.IPv6 != "") {
+				c.RecordsToCache(domainService, domain.InstanceId, config.IPv6Type)
+			}
 		}
 	}
-}
-
-// 添加或更新
-func (c *LocalCache) Put(cacheKey, ip, iptype, dnsName string) {
-	//c.current[cacheKey] = ip
-	c.IP[cacheKey] = ip
-	c.IpType[cacheKey] = iptype
-	c.DnsName[cacheKey] = dnsName
 }
 
 // 获取缓存的ip
@@ -71,9 +71,14 @@ func (c *LocalCache) GetIp(cacheKey string) string {
 	return c.IP[cacheKey]
 }
 
-// 获取缓存的recordid
-func (c *LocalCache) GetRecordId(cacheKey string) string {
+// 获取缓存的DnsName
+func (c *LocalCache) GetDnsName(cacheKey string) string {
 	return c.DnsName[cacheKey]
+}
+
+// 获取缓存的DnsName
+func (c *LocalCache) GetIpType(cacheKey string) string {
+	return c.IpType[cacheKey]
 }
 
 // 判断ip是否在缓存中
@@ -81,18 +86,27 @@ func (c *LocalCache) IsIPIn(cacheKey, ip string) bool {
 	return c.IP[cacheKey] == ip
 }
 
+// 判断DnsName是否在缓存中
+func (c *LocalCache) IsDnsNameIn(cacheKey, dnsName string) bool {
+	return c.DnsName[cacheKey] == dnsName
+}
+
+// 判断IpType是否在缓存中
+func (c *LocalCache) IsIpTypeIn(cacheKey, ipType string) bool {
+	return c.IpType[cacheKey] == ipType
+}
+
 // 域名的缓存是否存在
 func (c *LocalCache) IsNotExist(cacheKey string) bool {
-	return c.IP[cacheKey] == ""
+	return c.DnsName[cacheKey] == ""
 }
 
-// 判断RecordId是否在缓存中
-func (c *LocalCache) IsDnsNameIn(cacheKey, id string) bool {
-	return c.DnsName[cacheKey] == id
-}
-
-func (c *LocalCache) IsIpTypeIn(cacheKey, id string) bool {
-	return c.IpType[cacheKey] == id
+// 添加或更新
+func (c *LocalCache) Put(cacheKey, ip, ipType, dnsName string) {
+	//c.current[cacheKey] = ip
+	c.IP[cacheKey] = ip
+	c.IpType[cacheKey] = ipType
+	c.DnsName[cacheKey] = dnsName
 }
 
 // 删除记录
@@ -102,22 +116,21 @@ func (c *LocalCache) Del(cacheKey string) {
 	delete(c.IpType, cacheKey)
 }
 
-// 查询DNS记录并更新到缓存
-func (c *LocalCache) RecordsToCache(cli domain.Client, instanceId *string) {
-	queryDnsHostRequest := &domain.QueryDnsHostRequest{
-		InstanceId: instanceId,
-	}
-	runtime := &util.RuntimeOptions{}
-	resp, err := cli.QueryDnsHostWithOptions(queryDnsHostRequest, runtime)
+// 查询DNS胶水记录并更新到缓存
+func (c *LocalCache) RecordsToCache(domainService utils.DomainService, instanceId *string, ipType string) {
+	resp, err := domainService.QueryDnsHost(instanceId)
 	if err == nil {
 		// 获取域名解析记录，更新缓存
-		for _, record := range resp.Body.DnsHostList {
-			// instanceId#ns => 127.0.0.1
-			// instanceId#ns1 => ::1
-			cacheKey := CacheKey(*instanceId, *record.DnsName)
-			c.DnsName[cacheKey] = *record.DnsName
-			for _, iplist := range record.IpList {
-				c.IP[cacheKey] = *iplist
+		for _, dnsHostList := range resp.Body.DnsHostList {
+			// dns#A => 127.0.0.1
+			// dns#AAAA => ::1
+			cacheKey := CacheKey(*dnsHostList.DnsName, ipType)
+			c.DnsName[cacheKey] = *dnsHostList.DnsName
+			c.IpType[cacheKey] = ipType
+			// 估计会有的bug:
+			//    当一个胶水记录有绑定多个ip时,只有最后一个会写入到缓存
+			for _, ipList := range dnsHostList.IpList {
+				c.IP[cacheKey] = *ipList
 			}
 		}
 	}

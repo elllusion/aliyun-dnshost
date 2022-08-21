@@ -90,6 +90,6 @@ func GetPublishIP(IPCheckUrl string) string {
 
 // 构造缓存的key
 // 数据例子: ns#AAAA
-func CacheKey(DnsName, ipType string) string {
-	return (DnsName + "#" + ipType)
+func CacheKey(DnsName, IpType string) string {
+	return (DnsName + "#" + IpType)
 }

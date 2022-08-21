@@ -28,8 +28,9 @@ import (
 	"aliyun-dnshost/module/alidnshost"
 	"aliyun-dnshost/module/help"
 	"aliyun-dnshost/module/loger"
+	"aliyun-dnshost/module/utils"
 
-	domain "github.com/alibabacloud-go/domain-20180129/v3/client"
+	util "github.com/alibabacloud-go/tea-utils/service"
 	"github.com/alibabacloud-go/tea/tea"
 )
 
@@ -49,18 +50,23 @@ func main() {
 
 	// 创建客户端
 	cliPtr, err := alidnshost.CreateClient(tea.String(cfg.AccessKeyId), tea.String(cfg.AccessKeySecret))
+	runtime := &util.RuntimeOptions{}
 
 	if err != nil {
 		loger.Error(err.Error())
 		return
 	}
-	cli := *cliPtr
+
+	domainService := utils.DomainService{
+		Runtime: runtime,
+		Client:  *cliPtr,
+	}
 
 	// 加载缓存
-	myip.CurrentCache.Init(&cfg, cli)
+	myip.CurrentCache.Init(&cfg, domainService)
 
 	// 根据宽带多拨情况来判断使用哪个函数主体运行
-	var runFunc func(context.Context, *myConfig.Config, domain.Client)
+	var runFunc func(context.Context, *myConfig.Config, utils.DomainService)
 	if cfg.BroadbandRetry < 2 {
 		loger.Info("正常DNSHOST")
 		runFunc = alidnshost.Run
@@ -83,7 +89,7 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			runFunc(ctxChild, &cfg, cli)
+			runFunc(ctxChild, &cfg, domainService)
 			t.Reset(next(interval))
 		}
 	}
