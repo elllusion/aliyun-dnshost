@@ -1,6 +1,6 @@
 # aliyun-dnshost
 
-借助阿里云DNS HOST的API，通过定时检测IP变动，自动更新DNS HOST域名解析数据来实现动态域名解析（DDNS）功能。
+借助阿里云DNS HOST的API，通过定时检测IP变动，自动更新DNS HOST胶水记录的ip来实现自建权威DNS服务器，从而做到自己的域名自己说的算。
 
 功能：
 
