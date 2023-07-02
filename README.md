@@ -69,6 +69,11 @@ go build .
 
 ### 2.2、Docker运行
 
+拉取镜像
+```bash
+docker pull mslos/aliyun-dnshost:latest
+```
+
 ```bash
 docker run --name=aliyun-dnshost --restart=unless-stopped --net=host -v /etc/alidnshost-config.yaml:/etc/config.yaml -d mslos/aliyun-dnshost:latest
 ```
